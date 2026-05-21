@@ -1,3 +1,1224 @@
+APi key for TMDB: https://www.themoviedb.org/settings/account
+Api key for map for SDK: https://cloud.google.com/
+Site for firebase :  https://console.firebase.google.com/
+-----------------------
+# 📱 MoviesApp — Documentation Complète
+
+> Projet Android — Pr. OUHMIDA Asmae  
+> Guide pédagogique complet : chaque fichier, chaque classe, chaque ligne expliquée, suivi d'un guide pas à pas pour ajouter les fonctionnalités avancées du cours.
+
+---
+
+## Table des matières
+
+1. [Architecture générale](#1-architecture-générale)
+2. [Fichiers XML — Les layouts](#2-fichiers-xml--les-layouts)
+3. [Fichiers Java — La logique](#3-fichiers-java--la-logique)
+4. [Les bugs dans ton code actuel](#4-les-bugs-dans-ton-code-actuel)
+5. [Guide — Ajouter la recherche en temps réel](#5-guide--ajouter-la-recherche-en-temps-réel)
+6. [Guide — Connecter l'API TMDB avec Volley](#6-guide--connecter-lapi-tmdb-avec-volley)
+7. [Guide — Ajouter l'écran Détail du film](#7-guide--ajouter-lécran-détail-du-film)
+8. [Guide — Ajouter le lecteur de trailer](#8-guide--ajouter-le-lecteur-de-trailer)
+9. [Guide — Ajouter Google Maps](#9-guide--ajouter-google-maps)
+10. [AndroidManifest et build.gradle](#10-androidmanifest-et-buildgradle)
+
+---
+
+## 1. Architecture générale
+
+### Comment fonctionne l'app ?
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                   FLUX DE L'APPLICATION                      │
+│                                                              │
+│  1. L'app démarre → MainActivity.onCreate() s'exécute        │
+│  2. On crée un tableau de MyMovieData[] (les films)          │
+│  3. On crée un MyMovieAdapter avec ce tableau                │
+│  4. On "branche" l'adapter sur le RecyclerView               │
+│  5. L'écran affiche la liste des films en cartes             │
+│  6. L'utilisateur clique une carte → Toast avec le nom       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Les 3 briques à comprendre
+
+| Brique | Fichier | Rôle | Analogie |
+|--------|---------|------|----------|
+| **Modèle** | `MyMovieData.java` | Définit ce qu'est un film | La fiche d'un produit en magasin |
+| **Adapter** | `MyMovieAdapter.java` | Fait le lien données ↔ affichage | Le vendeur qui place les produits en rayon |
+| **Vue** | `activity_main.xml` + `movie_item_list.xml` | Ce que l'utilisateur voit | Le rayon et les étiquettes des produits |
+
+### Schéma des fichiers
+
+```
+MoviesApp/
+│
+├── java/com/example/movie_app_bdcc/
+│   ├── MainActivity.java        ← Point d'entrée, orchestre tout
+│   ├── MyMovieAdapter.java      ← Adapter pour le RecyclerView
+│   └── MyMovieData.java         ← Modèle de données (objet Film)
+│
+└── res/layout/
+    ├── activity_main.xml        ← Écran principal (contient le RecyclerView)
+    └── movie_item_list.xml      ← Layout d'une carte film
+```
+
+---
+
+## 2. Fichiers XML — Les layouts
+
+### `activity_main.xml` — L'écran principal
+
+```xml
+<LinearLayout
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/colorAccent">
+```
+
+| Attribut | Valeur | Explication |
+|----------|--------|-------------|
+| `layout_width="match_parent"` | toute la largeur | S'étire sur tout l'écran en largeur |
+| `layout_height="match_parent"` | toute la hauteur | S'étire sur tout l'écran en hauteur |
+| `orientation="vertical"` | vertical | Les enfants sont empilés du haut vers le bas |
+| `background="@color/colorAccent"` | couleur | Couleur de fond définie dans `colors.xml` |
+
+```xml
+<androidx.recyclerview.widget.RecyclerView
+    android:id="@+id/RecyclerView"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_margin="2dp"/>
+```
+
+| Attribut | Explication |
+|----------|-------------|
+| `id="@+id/RecyclerView"` | Identifiant pour retrouver cette vue depuis le code Java avec `findViewById()` |
+| `layout_margin="2dp"` | Espace de 2dp entre le bord de l'écran et la liste |
+| `RecyclerView` | Vue en liste intelligente : elle **recycle** les cartes qui sortent de l'écran pour éviter de créer des centaines de vues en mémoire |
+
+---
+
+### `movie_item_list.xml` — La carte d'un film
+
+Ce fichier définit **l'apparence d'une seule carte** dans la liste. Il est instancié autant de fois qu'il y a de films.
+
+```xml
+<androidx.cardview.widget.CardView
+    android:id="@+id/CardView"
+    app:cardBackgroundColor="@color/colorAccent"
+    app:cardCornerRadius="10dp"
+    app:cardElevation="10dp"
+    android:layout_margin="10dp"/>
+```
+
+| Attribut | Explication |
+|----------|-------------|
+| `cardCornerRadius="10dp"` | Arrondit les coins de la carte |
+| `cardElevation="10dp"` | Crée une ombre sous la carte (effet de profondeur/relief) |
+| `layout_margin="10dp"` | Espace entre les cartes dans la liste |
+
+```xml
+<ImageView
+    android:id="@+id/ImageView"
+    android:layout_width="120dp"
+    android:layout_height="150dp"
+    android:src="@drawable/avatar"/>
+```
+
+Affiche l'image du film. `120dp × 150dp` = dimensions fixes de la pochette. `src="@drawable/avatar"` est l'image par défaut affichée dans l'éditeur (elle sera remplacée dynamiquement par l'adapter).
+
+```xml
+<TextView
+    android:id="@+id/TextViewName"
+    android:textSize="25sp"
+    android:textStyle="bold"
+    android:textColor="@color/black"/>
+
+<TextView
+    android:id="@+id/TextViewDate"
+    android:textSize="25sp"
+    android:textStyle="italic|bold"
+    android:textColor="@color/colorPrimaryDark"/>
+```
+
+`sp` (scale-independent pixels) est l'unité à utiliser pour les textes car elle respecte les préférences de taille de police de l'utilisateur. `dp` est réservé aux marges et dimensions.
+
+---
+
+## 3. Fichiers Java — La logique
+
+### `MyMovieData.java` — Le modèle de données
+
+**Rôle** : représenter un film. C'est un simple objet Java (POJO) qui stocke les informations d'un film.
+
+```java
+public class MyMovieData {
+    private String movieName;   // Titre du film
+    private String movieData;   // Date de sortie
+    private Integer movieImage; // ID de la ressource image (R.drawable.xxx)
+```
+
+`private` = **encapsulation** : les champs ne sont pas accessibles directement depuis l'extérieur. On doit passer par les getters et setters.
+
+```java
+public MyMovieData(String movieName, String movieData, Integer movieImage) {
+    this.movieName = movieName;
+    this.movieData = movieData;
+    this.movieImage = movieImage;
+}
+```
+
+Le **constructeur** est appelé quand on écrit `new MyMovieData("Avengers", "2019 film", R.drawable.avatar)`. `this.movieName` désigne le champ de la classe, `movieName` désigne le paramètre reçu.
+
+```java
+public String getMovieName() { return movieName; }
+public String getMovieData()  { return movieData; }
+public Integer getMovieImage(){ return movieImage; }
+```
+
+Les **getters** permettent de lire les valeurs depuis l'extérieur (depuis l'adapter notamment).
+
+---
+
+### `MainActivity.java` — Le chef d'orchestre
+
+**Rôle** : point d'entrée de l'app. `onCreate()` est la première méthode appelée au démarrage.
+
+```java
+EdgeToEdge.enable(this);
+setContentView(R.layout.activity_main);
+```
+
+`EdgeToEdge.enable(this)` permet à l'app de s'afficher jusqu'aux bords de l'écran (sous la barre de statut et la barre de navigation). `setContentView()` charge le fichier XML et l'affiche à l'écran.
+
+```java
+ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
+    Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+    v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+    return insets;
+});
+```
+
+Ce bloc ajoute automatiquement un padding pour que le contenu ne se retrouve pas caché derrière la barre de statut ou la barre de navigation. C'est nécessaire car on a activé EdgeToEdge.
+
+```java
+RecyclerView recyclerView = findViewById(R.id.RecyclerView);
+recyclerView.setHasFixedSize(true);
+recyclerView.setLayoutManager(new LinearLayoutManager(this));
+```
+
+- `findViewById(R.id.RecyclerView)` cherche dans le layout XML la vue avec l'id `RecyclerView` et retourne un objet Java.
+- `setHasFixedSize(true)` : optimisation — on dit au RecyclerView que sa taille ne change pas selon le contenu.
+- `setLayoutManager(new LinearLayoutManager(this))` : définit que les éléments s'affichent en **liste verticale**. Sans LayoutManager, le RecyclerView ne sait pas comment arranger ses enfants.
+
+```java
+MyMovieData[] myMovieData = new MyMovieData[]{
+    new MyMovieData("Avengers", "2019 film", R.drawable.avatar),
+    new MyMovieData("Wednesday", "2019 film", R.drawable.avatar),
+    // ...
+};
+```
+
+On crée un tableau de 9 films codés en dur. `R.drawable.avatar` est l'identifiant entier de l'image `avatar.png` placée dans le dossier `res/drawable/`.
+
+```java
+MyMovieAdapter MY = new MyMovieAdapter(myMovieData, MainActivity.this);
+recyclerView.setAdapter(MY);
+```
+
+On crée l'adapter en lui passant les données et le contexte, puis on le "branche" sur le RecyclerView avec `setAdapter()`. À partir de là, la liste s'affiche.
+
+---
+
+### `MyMovieAdapter.java` — Le cœur de la liste
+
+**Rôle** : faire le lien entre les données (le tableau `MyMovieData[]`) et les vues (les cartes XML). Il répond à trois questions posées par le RecyclerView :
+1. Combien d'éléments y a-t-il ? → `getItemCount()`
+2. À quoi ressemble une carte ? → `onCreateViewHolder()`
+3. Quelles données mettre dans la carte numéro X ? → `onBindViewHolder()`
+
+```java
+public class MyMovieAdapter extends RecyclerView.Adapter<MyMovieAdapter.ViewHolder> {
+    MyMovieData[] myMovieData;
+    Context context;
+```
+
+`extends RecyclerView.Adapter<MyMovieAdapter.ViewHolder>` : on hérite de la classe Adapter fournie par Android. Le type entre `< >` indique quel ViewHolder on utilise.
+
+#### `onCreateViewHolder` — Fabriquer une nouvelle carte vide
+
+```java
+public MyMovieAdapter.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+    LayoutInflater layoutInflater = LayoutInflater.from(parent.getContext());
+    View view = layoutInflater.inflate(R.layout.movie_item_list, parent, false);
+    return new ViewHolder(view);
+}
+```
+
+- `LayoutInflater` : outil qui convertit un fichier XML en objets Java (View). Sans lui, on ne peut pas utiliser un fichier XML dans du code Java.
+- `.inflate(R.layout.movie_item_list, parent, false)` : lit le XML `movie_item_list.xml` et crée la vue correspondante. `false` = ne pas l'attacher immédiatement au parent, le RecyclerView s'en charge.
+- `return new ViewHolder(view)` : retourne un ViewHolder qui va mémoriser les références aux vues de cette carte.
+
+**Pourquoi le RecyclerView "recycle" ?** Android ne crée que 8 à 10 cartes pour remplir l'écran. Quand une carte sort en haut, elle est réutilisée pour afficher le film suivant en bas. `onCreateViewHolder` n'est donc appelé qu'une dizaine de fois, pas une fois par film.
+
+#### `onBindViewHolder` — Remplir une carte avec les données d'un film
+
+```java
+public void onBindViewHolder(MyMovieAdapter.ViewHolder holder, int position) {
+    final MyMovieData myMovieDataList = myMovieData[position];
+    holder.textViewName.setText(myMovieDataList.getMovieName());
+    holder.textViewData.setText(myMovieDataList.getMovieData());
+    holder.movieImage.setImageResource(myMovieDataList.getMovieImage());
+```
+
+`position` est l'indice du film à afficher (0 = premier film, 1 = deuxième, etc.). On récupère le film à cet indice, puis on remplit les vues du ViewHolder avec ses données.
+
+```java
+    holder.itemView.setOnClickListener(new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            Toast.makeText(context, myMovieDataList.getMovieName(), Toast.LENGTH_SHORT).show();
+        }
+    });
+}
+```
+
+`setOnClickListener` attache un écouteur de clic sur toute la carte. Quand l'utilisateur appuie dessus, un `Toast` (petit message temporaire en bas d'écran) affiche le nom du film.
+
+#### La classe `ViewHolder` — Le conteneur de vues
+
+```java
+public class ViewHolder extends RecyclerView.ViewHolder {
+    TextView textViewName;
+    TextView textViewData;
+    ImageView movieImage;
+
+    public ViewHolder(View itemView) {
+        super(itemView);
+        textViewName = itemView.findViewById(R.id.ImageView);   // ⚠️ voir bug section 4
+        textViewData = itemView.findViewById(R.id.TextViewDate);
+        itemView     = itemView.findViewById(R.id.ImageView);   // ⚠️ voir bug section 4
+    }
+}
+```
+
+Le ViewHolder stocke les références aux vues d'une carte. Sans lui, `onBindViewHolder` appellerait `findViewById()` à chaque défilement (très lent). Avec lui, `findViewById()` n'est appelé qu'une seule fois par carte créée.
+
+---
+
+## 4. Les bugs dans ton code actuel
+
+Ton code contient deux bugs importants dans la classe `ViewHolder` qui empêchent les images et les noms de s'afficher correctement.
+
+### Bug 1 — Mauvais ID pour `textViewName`
+
+```java
+// ❌ Code actuel (BUG)
+textViewName = itemView.findViewById(R.id.ImageView);
+
+// ✅ Correction
+textViewName = itemView.findViewById(R.id.TextViewName);
+```
+
+`R.id.ImageView` est l'ID de l'ImageView, pas du TextView du nom. Il faut utiliser `R.id.TextViewName`.
+
+### Bug 2 — Écrasement de `itemView`
+
+```java
+// ❌ Code actuel (BUG)
+itemView = itemView.findViewById(R.id.ImageView);
+// Cette ligne écrase la variable itemView avec un ImageView, ce qui casse tout
+
+// ✅ Correction
+movieImage = itemView.findViewById(R.id.ImageView);
+```
+
+Il manque l'assignation à `movieImage`. La ligne actuelle écrase `itemView` (la carte entière) avec l'ImageView, ce qui est une erreur grave.
+
+### Code corrigé complet du ViewHolder
+
+```java
+public ViewHolder(View itemView) {
+    super(itemView);
+    textViewName = itemView.findViewById(R.id.TextViewName);  // ✅ bon ID
+    textViewData = itemView.findViewById(R.id.TextViewDate);
+    movieImage   = itemView.findViewById(R.id.ImageView);     // ✅ bonne variable
+}
+```
+
+---
+
+## 5. Guide — Ajouter la recherche en temps réel
+
+Cette fonctionnalité permet de filtrer la liste de films pendant que l'utilisateur tape dans une barre de recherche.
+
+### Étape 1 — Modifier `activity_main.xml`
+
+Ajoute un `EditText` (champ de texte) **avant** le RecyclerView :
+
+```xml
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/colorAccent">
+
+    <!-- NOUVEAU : barre de recherche -->
+    <EditText
+        android:id="@+id/editTextSearch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Rechercher un film..."
+        android:inputType="text"/>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/RecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="2dp"/>
+
+</LinearLayout>
+```
+
+### Étape 2 — Modifier `MyMovieAdapter.java` pour implémenter `Filterable`
+
+`Filterable` est une interface Android qui oblige l'adapter à fournir un filtre. Voici le fichier complet corrigé et augmenté :
+
+```java
+import android.widget.Filter;
+import android.widget.Filterable;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+// Ajoute "implements Filterable" à la déclaration de la classe
+public class MyMovieAdapter extends RecyclerView.Adapter<MyMovieAdapter.ViewHolder>
+        implements Filterable {
+
+    private MyMovieData[] originalMovieData; // Liste originale, jamais modifiée
+    private List<MyMovieData> filteredMovieData; // Liste affichée (peut être filtrée)
+    private Context context;
+
+    public MyMovieAdapter(MyMovieData[] myMovieData, Context context) {
+        this.originalMovieData  = myMovieData;
+        this.filteredMovieData  = new ArrayList<>(Arrays.asList(myMovieData));
+        // On copie le tableau dans une List modifiable.
+        // On ne modifie JAMAIS originalMovieData, pour pouvoir
+        // revenir à la liste complète quand l'utilisateur efface sa recherche.
+        this.context = context;
+    }
+
+    @Override
+    public void onBindViewHolder(ViewHolder holder, int position) {
+        // Utilise filteredMovieData (pas originalMovieData)
+        final MyMovieData movie = filteredMovieData.get(position);
+        holder.textViewName.setText(movie.getMovieName());
+        holder.textViewData.setText(movie.getMovieData());
+        holder.movieImage.setImageResource(movie.getMovieImage());
+
+        holder.itemView.setOnClickListener(v ->
+            Toast.makeText(context, movie.getMovieName(), Toast.LENGTH_SHORT).show()
+        );
+    }
+
+    @Override
+    public int getItemCount() {
+        return filteredMovieData.size(); // Taille de la liste filtrée
+    }
+
+    // Méthode imposée par Filterable
+    @Override
+    public Filter getFilter() {
+        return movieFilter;
+    }
+
+    private Filter movieFilter = new Filter() {
+
+        // S'exécute en arrière-plan (thread séparé) pour ne pas bloquer l'UI
+        @Override
+        protected FilterResults performFiltering(CharSequence constraint) {
+            List<MyMovieData> filteredList = new ArrayList<>();
+
+            if (constraint == null || constraint.length() == 0) {
+                // Champ vide → on remet tous les films
+                filteredList.addAll(Arrays.asList(originalMovieData));
+            } else {
+                String pattern = constraint.toString().toLowerCase().trim();
+                // .toLowerCase() : rend la recherche insensible à la casse
+                // .trim()         : supprime les espaces au début et à la fin
+
+                for (MyMovieData movie : originalMovieData) {
+                    if (movie.getMovieName().toLowerCase().contains(pattern)) {
+                        filteredList.add(movie); // Film correspondant → on le garde
+                    }
+                }
+            }
+
+            FilterResults results = new FilterResults();
+            results.values = filteredList;
+            return results;
+        }
+
+        // S'exécute sur le thread principal pour mettre à jour l'affichage
+        @Override
+        protected void publishResults(CharSequence constraint, FilterResults results) {
+            filteredMovieData.clear();
+            filteredMovieData.addAll((List) results.values);
+            notifyDataSetChanged(); // Indispensable : prévient le RecyclerView
+            // que les données ont changé et qu'il doit se redessiner
+        }
+    };
+
+    // ViewHolder corrigé
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        TextView textViewName;
+        TextView textViewData;
+        ImageView movieImage;
+
+        public ViewHolder(View itemView) {
+            super(itemView);
+            textViewName = itemView.findViewById(R.id.TextViewName);
+            textViewData = itemView.findViewById(R.id.TextViewDate);
+            movieImage   = itemView.findViewById(R.id.ImageView);
+        }
+    }
+}
+```
+
+### Étape 3 — Modifier `MainActivity.java` pour connecter la recherche
+
+```java
+public class MainActivity extends AppCompatActivity {
+
+    private MyMovieAdapter myMovieAdapter; // Déclare l'adapter en attribut de classe
+    private EditText searchEditText;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        EdgeToEdge.enable(this);
+        setContentView(R.layout.activity_main);
+
+        // ... (padding EdgeToEdge, inchangé)
+
+        searchEditText = findViewById(R.id.editTextSearch);
+        RecyclerView recyclerView = findViewById(R.id.RecyclerView);
+        recyclerView.setHasFixedSize(true);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+        MyMovieData[] myMovieData = new MyMovieData[]{
+            new MyMovieData("Avengers",       "2019 film", R.drawable.avatar),
+            new MyMovieData("Wednesday",      "2019 film", R.drawable.avatar),
+            new MyMovieData("Twilight",       "2019 film", R.drawable.avatar),
+            new MyMovieData("Maleficent",     "2019 film", R.drawable.avatar),
+            new MyMovieData("Venom",          "2019 film", R.drawable.avatar),
+            new MyMovieData("Batman Begins",  "2019 film", R.drawable.avatar),
+            new MyMovieData("Good Deeds",     "2019 film", R.drawable.avatar),
+            new MyMovieData("Jumanji",        "2019 film", R.drawable.avatar),
+            new MyMovieData("Hulk",           "2019 film", R.drawable.avatar)
+        };
+
+        myMovieAdapter = new MyMovieAdapter(myMovieData, MainActivity.this);
+        recyclerView.setAdapter(myMovieAdapter);
+
+        // TextWatcher : écouteur de changement sur le champ de recherche
+        searchEditText.addTextChangedListener(new TextWatcher() {
+
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                // Rien à faire ici
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                // Appelé à chaque frappe clavier, en temps réel
+                // "s" contient le texte actuel dans le champ
+                if (myMovieAdapter != null) {
+                    myMovieAdapter.getFilter().filter(s);
+                    // Déclenche performFiltering(s) dans l'adapter
+                }
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                // Rien à faire ici
+            }
+        });
+    }
+}
+```
+
+---
+
+## 6. Guide — Connecter l'API TMDB avec Volley
+
+Au lieu de films codés en dur, on va récupérer les vrais films populaires depuis internet.
+
+### Pourquoi Volley ?
+
+Android interdit les requêtes internet dans le thread principal (ça bloquerait l'écran). Volley fait la requête **en arrière-plan** et appelle ton code quand la réponse est prête.
+
+```
+SANS Volley → app bloquée pendant la requête ❌
+AVEC Volley → app fluide, requête en arrière-plan ✅
+```
+
+### Étape 1 — Ajouter Volley et Glide dans `build.gradle`
+
+```gradle
+dependencies {
+    implementation("com.android.volley:volley:1.2.0")
+    implementation("com.github.bumptech.glide:glide:4.12.0")
+    annotationProcessor("com.github.bumptech.glide:compiler:4.12.0")
+}
+```
+
+**Glide** est une bibliothèque qui charge des images depuis une URL en arrière-plan et les place automatiquement dans un ImageView.
+
+### Étape 2 — Ajouter la permission internet dans `AndroidManifest.xml`
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+```
+
+Sans cette ligne, Android refuse toute connexion réseau.
+
+### Étape 3 — Modifier `MyMovieData.java` pour ajouter l'ID et changer le type d'image
+
+```java
+public class MyMovieData {
+    private int movieId;          // ID unique TMDB (ex: 550)
+    private String movieName;
+    private String movieData;
+    private String movieImage;    // Maintenant une URL (String), plus un int
+
+    public MyMovieData(int movieId, String movieName, String movieData, String movieImage) {
+        this.movieId    = movieId;
+        this.movieName  = movieName;
+        this.movieData  = movieData;
+        this.movieImage = movieImage;
+    }
+
+    public int    getMovieId()   { return movieId; }
+    public String getMovieName() { return movieName; }
+    public String getMovieData() { return movieData; }
+    public String getMovieImage(){ return movieImage; }
+}
+```
+
+### Étape 4 — Modifier `MainActivity.java` pour appeler l'API
+
+```java
+public class MainActivity extends AppCompatActivity {
+
+    // Remplace "your_api_key" par ta vraie clé obtenue sur themoviedb.org
+    private static final String TMDB_API_KEY = "your_api_key";
+    private static final String BASE_URL = "https://api.themoviedb.org/3/movie/popular";
+    private static final String TAG = "MainActivity";
+
+    private RecyclerView recyclerView;
+    private MyMovieAdapter myMovieAdapter;
+    private EditText searchEditText;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        searchEditText = findViewById(R.id.editTextSearch);
+        recyclerView   = findViewById(R.id.RecyclerView);
+        recyclerView.setHasFixedSize(true);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+        // Construire l'URL complète avec la clé API
+        String url = BASE_URL + "?api_key=" + TMDB_API_KEY;
+        // Résultat : "https://api.themoviedb.org/3/movie/popular?api_key=abc123"
+
+        RequestQueue queue = Volley.newRequestQueue(this);
+        // Crée le gestionnaire de requêtes HTTP. "this" = contexte Android.
+
+        JsonObjectRequest request = new JsonObjectRequest(
+            Request.Method.GET, // GET = lire des données (pas envoyer)
+            url,
+            null,               // Corps de la requête : null car c'est un GET
+
+            // Callback de succès : appelé quand TMDB répond
+            response -> {
+                try {
+                    JSONArray results = response.getJSONArray("results");
+                    // "results" est la clé du tableau de films dans le JSON TMDB
+
+                    MyMovieData[] movies = new MyMovieData[results.length()];
+
+                    for (int i = 0; i < results.length(); i++) {
+                        JSONObject movie = results.getJSONObject(i);
+
+                        int    id          = movie.getInt("id");
+                        String title       = movie.getString("title");
+                        String releaseDate = movie.getString("release_date");
+                        String posterPath  = movie.getString("poster_path");
+                        // poster_path = chemin relatif ex: "/pB8BM7.jpg"
+                        // L'URL complète sera construite dans l'adapter
+
+                        movies[i] = new MyMovieData(id, title, releaseDate, posterPath);
+                    }
+
+                    myMovieAdapter = new MyMovieAdapter(movies, MainActivity.this);
+                    recyclerView.setAdapter(myMovieAdapter);
+
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            },
+
+            // Callback d'erreur : appelé si la requête échoue
+            error -> Log.e(TAG, "Erreur réseau : " + error.getMessage())
+        );
+
+        queue.add(request); // Envoie la requête (en arrière-plan)
+
+        // TextWatcher (identique à la section précédente)
+        searchEditText.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+                if (myMovieAdapter != null) myMovieAdapter.getFilter().filter(s);
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+    }
+}
+```
+
+### Étape 5 — Modifier l'adapter pour utiliser Glide
+
+Dans `onBindViewHolder`, remplace `setImageResource()` (qui ne fonctionne qu'avec des ressources locales) par Glide :
+
+```java
+@Override
+public void onBindViewHolder(ViewHolder holder, int position) {
+    final MyMovieData movie = filteredMovieData.get(position);
+
+    holder.textViewName.setText(movie.getMovieName());
+    holder.textViewData.setText(movie.getMovieData());
+
+    // Glide charge l'image depuis l'URL en arrière-plan
+    // "https://image.tmdb.org/t/p/w500" est le préfixe de toutes les images TMDB
+    // "w500" = largeur 500px
+    Glide.with(context)
+         .load("https://image.tmdb.org/t/p/w500" + movie.getMovieImage())
+         .into(holder.movieImage);
+}
+```
+
+---
+
+## 7. Guide — Ajouter l'écran Détail du film
+
+Quand l'utilisateur clique sur un film, on ouvre un nouvel écran avec la description complète.
+
+### Étape 1 — Créer `activity_movie_detail.xml`
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <androidx.cardview.widget.CardView
+        app:cardElevation="10dp"
+        app:cardCornerRadius="10dp"
+        android:layout_margin="5dp"
+        app:cardBackgroundColor="#FFFFFF"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <ImageView
+                android:id="@+id/imageview"
+                android:layout_margin="10dp"
+                android:layout_width="120dp"
+                android:layout_height="150dp"/>
+
+            <LinearLayout
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <TextView
+                    android:id="@+id/textName"
+                    android:textStyle="bold"
+                    android:layout_margin="7dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"/>
+
+                <TextView
+                    android:id="@+id/Details"
+                    android:layout_margin="5dp"
+                    android:textColor="#000"
+                    android:textSize="12sp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"/>
+
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+</LinearLayout>
+```
+
+### Étape 2 — Créer `MovieDetailActivity.java`
+
+```java
+package com.example.movie_app_bdcc;
+
+import android.os.Bundle;
+import android.util.Log;
+import android.widget.ImageView;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.Volley;
+import com.bumptech.glide.Glide;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+public class MovieDetailActivity extends AppCompatActivity {
+
+    private TextView descriptionTextView;
+    private TextView nameTextView;
+    private ImageView img;
+    private RequestQueue requestQueue;
+    private static final String TAG = "MovieDetailActivity";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_movie_detail);
+
+        descriptionTextView = findViewById(R.id.Details);
+        nameTextView        = findViewById(R.id.textName);
+        img                 = findViewById(R.id.imageview);
+
+        requestQueue = Volley.newRequestQueue(this);
+
+        // Récupère l'ID du film transmis par l'Intent
+        int movieId = getIntent().getIntExtra("movieId", -1);
+        // -1 est la valeur par défaut si "movieId" n'est pas trouvé
+
+        if (movieId != -1) {
+            fetchMovieDetails(movieId);
+        } else {
+            descriptionTextView.setText("Aucun film sélectionné.");
+        }
+    }
+
+    private void fetchMovieDetails(int movieId) {
+        String apiKey = "your_api_key";
+        String url = "https://api.themoviedb.org/3/movie/" + movieId + "?api_key=" + apiKey;
+
+        JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, url, null,
+            response -> {
+                try {
+                    String name        = response.getString("title");
+                    String description = response.getString("overview");
+                    String imageUrl    = "https://image.tmdb.org/t/p/w500"
+                                         + response.getString("poster_path");
+
+                    nameTextView.setText(name);
+                    descriptionTextView.setText(description);
+                    Glide.with(MovieDetailActivity.this).load(imageUrl).into(img);
+
+                } catch (JSONException e) {
+                    Log.e(TAG, "Erreur parsing JSON : " + e.getMessage());
+                }
+            },
+            error -> {
+                Log.e(TAG, "Erreur réseau : " + error.getMessage());
+                descriptionTextView.setText("Impossible de charger les détails.");
+            }
+        );
+
+        requestQueue.add(request);
+    }
+}
+```
+
+### Étape 3 — Déclarer `MovieDetailActivity` dans `AndroidManifest.xml`
+
+Toute nouvelle Activity doit être déclarée dans le Manifest, sinon l'app plante :
+
+```xml
+<application ...>
+    <activity android:name=".MainActivity">
+        <intent-filter>
+            <action android:name="android.intent.action.MAIN"/>
+            <category android:name="android.intent.category.LAUNCHER"/>
+        </intent-filter>
+    </activity>
+
+    <!-- NOUVEAU -->
+    <activity android:name=".MovieDetailActivity"/>
+
+</application>
+```
+
+### Étape 4 — Modifier le clic dans l'adapter pour ouvrir le détail
+
+Dans `onBindViewHolder` de `MyMovieAdapter`, remplace le Toast par une navigation :
+
+```java
+holder.itemView.setOnClickListener(v -> {
+    Intent intent = new Intent(context, MovieDetailActivity.class);
+    intent.putExtra("movieId", movie.getMovieId());
+    // putExtra("clé", valeur) : envoie des données à la prochaine Activity
+    // Dans MovieDetailActivity, on récupère avec getIntent().getIntExtra("movieId", -1)
+    context.startActivity(intent);
+});
+```
+
+---
+
+## 8. Guide — Ajouter le lecteur de trailer
+
+### Étape 1 — Créer `activity_video_player.xml`
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+`WebView` est un navigateur web intégré dans l'app. On l'utilise pour charger et lire le trailer YouTube via une URL embed.
+
+### Étape 2 — Créer `VideoPlayer.java`
+
+```java
+package com.example.movie_app_bdcc;
+
+import android.content.res.Configuration;
+import android.os.Bundle;
+import android.webkit.WebView;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class VideoPlayer extends AppCompatActivity {
+
+    private WebView webView;
+    private String videoUrl;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_video_player);
+
+        videoUrl = getIntent().getStringExtra("videoUrl");
+        // Récupère l'URL YouTube embed envoyée par MovieDetailActivity
+
+        webView = findViewById(R.id.webView);
+        webView.getSettings().setJavaScriptEnabled(true);
+        // OBLIGATOIRE : le player YouTube utilise JavaScript.
+        // Sans cette ligne, la vidéo ne s'affiche pas.
+
+        webView.loadUrl(videoUrl);
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // Appelé quand l'utilisateur tourne son téléphone
+        if (webView != null) {
+            webView.loadUrl(videoUrl); // Recharge la vidéo en plein écran paysage
+        }
+    }
+}
+```
+
+### Étape 3 — Ajouter le bouton "Play" et la requête trailer dans `MovieDetailActivity`
+
+Dans `activity_movie_detail.xml`, ajoute ce bouton après le CardView :
+
+```xml
+<Button
+    android:id="@+id/playButton"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:text="▶ Voir le trailer"
+    android:layout_marginTop="16dp"/>
+```
+
+Dans `MovieDetailActivity.java`, ajoute la logique :
+
+```java
+private String trailerKey; // Clé YouTube du trailer (ex: "dQw4w9WgXcQ")
+private Button playButton;
+
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+    // ... (code existant)
+
+    playButton = findViewById(R.id.playButton);
+    playButton.setOnClickListener(v -> playTrailer());
+
+    if (movieId != -1) {
+        fetchMovieDetails(movieId);
+        fetchMovieTrailer(movieId); // Nouvelle méthode
+    }
+}
+
+private void fetchMovieTrailer(int movieId) {
+    String url = "https://api.themoviedb.org/3/movie/" + movieId
+               + "/videos?api_key=your_api_key";
+
+    JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, url, null,
+        response -> {
+            try {
+                JSONArray results = response.getJSONArray("results");
+                for (int i = 0; i < results.length(); i++) {
+                    JSONObject video = results.getJSONObject(i);
+                    if (video.getString("type").equals("Trailer")) {
+                        trailerKey = video.getString("key");
+                        // "key" = l'ID YouTube ex: "dQw4w9WgXcQ"
+                        break; // On s'arrête au premier trailer trouvé
+                    }
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        },
+        error -> Toast.makeText(this, "Trailer non disponible", Toast.LENGTH_SHORT).show()
+    );
+
+    requestQueue.add(request);
+}
+
+private void playTrailer() {
+    if (trailerKey != null && !trailerKey.isEmpty()) {
+        String trailerUrl = "https://www.youtube.com/embed/" + trailerKey;
+        // URL format embed YouTube : lisible dans un WebView
+
+        Intent intent = new Intent(MovieDetailActivity.this, VideoPlayer.class);
+        intent.putExtra("videoUrl", trailerUrl);
+        startActivity(intent);
+    } else {
+        Toast.makeText(this, "Trailer non disponible", Toast.LENGTH_SHORT).show();
+    }
+}
+```
+
+N'oublie pas de déclarer `VideoPlayer` dans `AndroidManifest.xml` :
+
+```xml
+<activity android:name=".VideoPlayer"/>
+```
+
+---
+
+## 9. Guide — Ajouter Google Maps
+
+### Étape 1 — Dépendances dans `build.gradle`
+
+```gradle
+implementation("com.google.android.gms:play-services-maps:17.0.0")
+implementation("com.google.android.gms:play-services-location:17.0.0")
+```
+
+### Étape 2 — Clé API dans `AndroidManifest.xml`
+
+Obtiens une clé sur [Google Cloud Console](https://cloud.google.com/), active l'API "Maps SDK for Android", puis :
+
+```xml
+<application ...>
+    <meta-data
+        android:name="com.google.android.geo.API_KEY"
+        android:value="ta_cle_google_maps"/>
+</application>
+```
+
+Permissions à ajouter :
+
+```xml
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+```
+
+### Étape 3 — Ajouter la carte dans `activity_movie_detail.xml`
+
+```xml
+<fragment
+    android:id="@+id/map"
+    android:name="com.google.android.gms.maps.SupportMapFragment"
+    android:layout_width="match_parent"
+    android:layout_height="300dp"
+    android:layout_marginTop="16dp"/>
+```
+
+### Étape 4 — Implémenter la carte dans `MovieDetailActivity.java`
+
+```java
+public class MovieDetailActivity extends AppCompatActivity implements OnMapReadyCallback {
+
+    private GoogleMap mMap;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        // ... (code existant)
+
+        SupportMapFragment mapFragment = (SupportMapFragment)
+            getSupportFragmentManager().findFragmentById(R.id.map);
+        mapFragment.getMapAsync(this);
+        // getMapAsync() appelle onMapReady() quand la carte est prête
+    }
+
+    @Override
+    public void onMapReady(GoogleMap googleMap) {
+        mMap = googleMap;
+
+        // Coordonnées GPS d'un cinéma à Casablanca
+        LatLng cinema = new LatLng(33.596460, -7.615480);
+
+        // Ajouter un marqueur sur la carte
+        mMap.addMarker(new MarkerOptions()
+            .position(cinema)
+            .title("Cinéma")
+            .snippet("Votre cinéma le plus proche"));
+
+        // Centrer la caméra sur le marqueur, zoom 15 (niveau quartier)
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(cinema, 15));
+
+        // Activer le bouton "Ma position" si la permission est accordée
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            mMap.setMyLocationEnabled(true);
+        } else {
+            ActivityCompat.requestPermissions(this,
+                new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1001);
+        }
+    }
+}
+```
+
+---
+
+## 10. AndroidManifest et build.gradle
+
+### `AndroidManifest.xml` complet
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Permissions -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.Movie_app_bdcc">
+
+        <!-- Clé Google Maps -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="ta_cle_google_maps"/>
+
+        <!-- Activités déclarées -->
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".MovieDetailActivity"/>
+        <activity android:name=".VideoPlayer"/>
+
+    </application>
+</manifest>
+```
+
+### `build.gradle` complet
+
+```gradle
+dependencies {
+    implementation("com.google.android.gms:play-services-maps:17.0.0")
+    implementation("com.google.android.gms:play-services-location:17.0.0")
+    implementation("com.android.volley:volley:1.2.0")
+    implementation("com.github.bumptech.glide:glide:4.12.0")
+    annotationProcessor("com.github.bumptech.glide:compiler:4.12.0")
+
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.recyclerview:recyclerview:1.3.0")
+    implementation("androidx.cardview:cardview:1.0.0")
+    implementation("com.google.android.material:material:1.9.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+}
+```
+
+---
+
+## Récapitulatif du flux complet
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   FLUX COMPLET FINAL                        │
+│                                                             │
+│  ① App démarre → MainActivity.onCreate()                    │
+│        │                                                    │
+│  ② Volley envoie GET api.themoviedb.org/3/movie/popular     │
+│        │                                                    │
+│  ③ TMDB répond avec JSON → parsing → MyMovieData[]          │
+│        │                                                    │
+│  ④ MyMovieAdapter + setAdapter() → films affichés           │
+│        │                                                    │
+│  ⑤ Utilisateur tape → TextWatcher → filter() → liste filtre │
+│        │                                                    │
+│  ⑥ Utilisateur clique → Intent → MovieDetailActivity        │
+│        │                                                    │
+│  ⑦ Deux requêtes : détails du film + trailer key            │
+│        │                                                    │
+│  ⑧ Carte Google Maps affichée avec marqueur cinéma          │
+│        │                                                    │
+│  ⑨ Utilisateur clique "Play" → VideoPlayer (WebView YouTube)│
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+*Projet réalisé en cours — Pr. OUHMIDA Asmae*----------------------------------
+Un Adapter est le pont entre :
+
+📦 Données (films)  →  🧠 Adapter  →  📱 Interface (RecyclerView)
+Le ViewHolder = un objet qui contient les vues d’une carte film.
+
 # 📘 Explications Détaillées — MoviesApp
 > Guide pédagogique complet : chaque concept, chaque ligne, chaque mot-clé expliqué.
 
